@@ -30,6 +30,10 @@ v0.1.x are the original PS5LM payload releases by Mert Cobanov.
   resident size and the payload budget's limits (`budget_get`).
 
 ### Fixed
+- A float in a request (`"temperature": 0.7`, a tool schema's `"minimum": -100.0`) no longer
+  stops llama-server. The console's `localeconv()` reports an empty decimal point while its
+  `strtod` reads `.`, so nlohmann::json's number check failed (`json.hpp`, GGML_ASSERT). The app
+  now gives the C locale's, as PS5LM does since v0.9.0 (cobanov/PS5LM#19).
 - Storage on consoles whose HEN does not open `/data` to the title on its own (OnionHEN;
   cobanov/PS5LM#16). The app now asks when it starts, in every process (the restart for a model
   starts a new one), by writing `{"PID":n}` to `/download0/etahen_jailbreak`, which OnionHEN

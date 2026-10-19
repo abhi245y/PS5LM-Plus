@@ -6,6 +6,8 @@
  */
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <locale.h>
 #include <pwd.h>
 #include <stddef.h>
 #include <time.h>
@@ -263,3 +265,21 @@ int accept4(int s, struct sockaddr *restrict addr, socklen_t *restrict addrlen, 
 /* ps5-homebrew-ui's system.cpp calls this before hiding the splash, for apps
  * whose runtime holds the request back; PS5LM's does not. */
 void hui_release_splash(void) {}
+
+/* The console reports an empty decimal point while its strtod reads '.'
+ * (PS5_Vulkan docs/RADV_PHASE.md). nlohmann::json puts the reported point into
+ * a number before strtod, so a float in any request ("temperature": 0.7) failed
+ * its assertion and took the server down. This is the C locale's. */
+struct lconv *localeconv(void) {
+    static struct lconv c = {
+        .decimal_point = ".", .thousands_sep = "", .grouping = "",
+        .int_curr_symbol = "", .currency_symbol = "", .mon_decimal_point = "",
+        .mon_thousands_sep = "", .mon_grouping = "", .positive_sign = "", .negative_sign = "",
+        .int_frac_digits = CHAR_MAX, .frac_digits = CHAR_MAX, .p_cs_precedes = CHAR_MAX,
+        .p_sep_by_space = CHAR_MAX, .n_cs_precedes = CHAR_MAX, .n_sep_by_space = CHAR_MAX,
+        .p_sign_posn = CHAR_MAX, .n_sign_posn = CHAR_MAX, .int_p_cs_precedes = CHAR_MAX,
+        .int_n_cs_precedes = CHAR_MAX, .int_p_sep_by_space = CHAR_MAX, .int_n_sep_by_space = CHAR_MAX,
+        .int_p_sign_posn = CHAR_MAX, .int_n_sign_posn = CHAR_MAX,
+    };
+    return &c;
+}
