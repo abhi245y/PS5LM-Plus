@@ -108,6 +108,21 @@ What a title has to do differently from a payload, each found by a crash:
 
 Unloading a model in the running app leaves part of its GPU memory held: with Qwen3.8-27B UD-IQ2_XXS at 64k, the pool went from 11.01 GiB free before loading to 5.77 GiB free after `llama_server` returned, and ggml's Vulkan figure fell the same way, so the next model could not get its KV cache. The app therefore changes model by restarting itself: it writes the choice to `/data/PS5LM/model.txt` (read once by the new process, then deleted, so a plain launch loads nothing and opens the library) and calls `sceSystemServiceLoadExec("/app0/eboot.bin", NULL)`. The system replaces the process (`Kill for LoadExec(0x11d) => 0`, then a new `EXEC`) without the crash reporter, and the new process starts from the whole pool (11.01 GiB free). Where the memory is held is still open.
 
+### Reading a model file off the internal drive
+
+`probes/ioprobe` against `/data/PS5LM/models/Qwen3.5-9B-Q8_0.gguf` (8.87 GiB), run with `scripts/run.sh`, firmware 13.60, PS5LM Plus v0.8.3 open with a 12B model loaded and idle. It reads 512 MiB per line; the file is not the one the app has loaded.
+
+| Read | direct (`O_DIRECT`) | buffered |
+|---|---|---|
+| sequential 8 MiB, 1 thread | 1475 MB/s | 1331 MB/s |
+| random 0.5 MiB, 1 / 4 / 8 threads | 387 / 115 / 130 MB/s | 384 / 109 / 104 MB/s |
+| random 1 MiB, 1 / 4 / 8 threads | 707 / 202 / 229 MB/s | 723 / 154 / 143 MB/s |
+| random 2 MiB, 1 / 4 / 8 threads | 964 / 297 / 248 MB/s | 955 / 196 / 199 MB/s |
+
+More reader threads read less, not more: four threads on random 1 MiB reads got under a third of one thread's speed. Buffered and direct reads agree, so the page cache is not hiding anything. Only large reads from one thread come near 1 GB/s. A design that reads expert slabs from this drive with several threads (a MoE larger than the heap) would start from about 0.2 GB/s.
+
+`-lm mmap` did not load. With an `app-args.txt` of `-m Qwen3.5-9B-Q8_0.gguf -ngl 999 -fit off -lm mmap -c 8192 -fa on -ctk q8_0 -ctv q8_0 -b 256 -ub 64 -np 1 -ctxcp 1 -cram 0 --host 0.0.0.0 --port 8081`, llama-server started (no "mmap failed") and `/health` answered 503 "Loading model" for more than 20 minutes. `llama.log` ended at `load_model: loading model` with nothing after it, FTP stopped answering, and the app had to be closed and started again. Starting it again repeated the load, because `app-args.txt` stays until a `load` request or the library's choice deletes it (`unlink(kArgs)` in `main.cpp`); deleting the file over FTP first stops that. The same file loads with the planner's `-lm none`. The drive speeds above do not explain the stall, so the cause is not known. Issue #10 (v0.8.4 load of 18 minutes, about 8 MB/s) is a similar symptom on a different build; this one was on v0.8.3.
+
 ### The dashboard on the console
 
 ps5-homebrew-ui draws through ps5-opengl in the same title as RADV: the GL stack is linked as one object with only its GL/EGL API global (4,399 symbol names collide with RADV's Mesa otherwise), `sceAgcInit` runs once for both drivers (`--wrap`), and the GL runtime's thread-local initialiser `_ZTH23_mesa_glapi_tls_Context` is an empty function, as ProsperoAI has it. The screen costs about 0.35 GiB of the pool (11.38 to 11.03 GiB free). The app can be driven from a PC without a controller: `scripts/ps5lm-app.sh close|deploy|launch|screenshot|load|unload`.
