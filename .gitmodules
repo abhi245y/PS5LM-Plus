@@ -3,4 +3,4 @@
 	url = https://github.com/ggml-org/llama.cpp
 [submodule "third_party/ps5-homebrew-ui"]
 	path = third_party/ps5-homebrew-ui
-	url = https://github.com/blackbearreloaded/ps5-homebrew-ui
+	url = https://github.com/Phononenom/ps5-homebrew-ui

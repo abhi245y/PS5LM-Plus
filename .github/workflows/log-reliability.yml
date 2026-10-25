@@ -1,0 +1,55 @@
+name: Log reliability
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize only llama.cpp (no UI SDK required)
+        run: git submodule update --init --depth 1 third_party/llama.cpp
+      - name: Apply pinned PS5 patches
+        run: |
+          for p in "$PWD"/patches/*.patch; do
+            git -C third_party/llama.cpp apply "$p"
+          done
+      - name: Blocked-sink regressions and negative controls
+        run: python3 scripts/test-log-backpressure.py
+      - name: Script syntax and whitespace
+        run: |
+          bash -n scripts/build-app.sh scripts/build-log-test-ps5.sh
+          python3 -m py_compile scripts/test-log-backpressure.py
+          git diff --check
+  ps5-compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host LLVM tools
+        run: sudo apt-get update && sudo apt-get install -y clang llvm lld
+      - name: Initialize llama.cpp and apply patches
+        run: |
+          git submodule update --init --depth 1 third_party/llama.cpp
+          for p in "$PWD"/patches/*.patch; do
+            git -C third_party/llama.cpp apply "$p"
+          done
+      - name: Fetch verified official payload SDK v0.45
+        run: |
+          mkdir -p .deps
+          curl -fL --retry 3 -o .deps/sdk.zip https://github.com/ps5-payload-dev/sdk/releases/download/v0.45/ps5-payload-sdk.zip
+          # The SHA below is the complete pinned release archive digest.
+          echo '5fac64093d0e3e69f2584ce7935f24f703f622d9681f1495c85b9f00d1291a2c  .deps/sdk.zip' | sha256sum -c -
+          unzip -q .deps/sdk.zip -d .deps
+          chmod +x .deps/ps5-payload-sdk/bin/*
+      - name: Compile real PS5 logger test (no launch)
+        env:
+          PS5_PAYLOAD_SDK: ${{ github.workspace }}/.deps/ps5-payload-sdk
+        run: bash scripts/build-log-test-ps5.sh

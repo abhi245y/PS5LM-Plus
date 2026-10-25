@@ -28,6 +28,7 @@ for f in "$archive" "$tool" "$vk/runtime/libc.prx" "$sdk/bin/prospero-lld" "$gls
     [ -e "$f" ] || { echo "build-app: missing $f" >&2; exit 2; }
 done
 export PS5_PAYLOAD_SDK="$sdk" PS5_VULKAN_ROOT="$vk"
+mkdir -p "$out"
 
 # radv-link.sh takes Clang's builtins from <resource dir>/lib/linux/, where
 # Debian and Arch put them; Fedora keeps them under the target triple. A clang
@@ -217,16 +218,16 @@ cp -r "$root/third_party/ps5-homebrew-ui/assets/audio/sfx" "$app/assets/audio/"
 # ps5-exporter (Marice, GPL-3.0): a title may not read the temperature, fan or
 # SoC power sensors, a payload may. The app sends it to elfldr when it is not
 # running. Pinned by version and hash, downloaded once into .deps.
-exporter="$root/.deps/ps5-exporter-0.2.0.elf"
-exporter_sha=0d19f7a293eeb30178ba562a3712abfdc50f6b6ebbe180ceaad92dc557948ba8
+exporter="$root/.deps/ps5-exporter-0.3.1.elf"
+exporter_sha=ff0c36333ba44da20a05039f148b644225edfeeac80e7c12006f767681739862
 if [ ! -f "$exporter" ]; then
-    curl -sSfL -o "$exporter.part" https://github.com/Marice/ps5-exporter/releases/download/v0.2.0/ps5-exporter.elf
+    curl -sSfL -o "$exporter.part" https://github.com/Marice/ps5-exporter/releases/download/v0.3.1/ps5-exporter.elf
     mv "$exporter.part" "$exporter"
 fi
 echo "$exporter_sha  $exporter" | sha256sum -c --quiet || { echo "build-app: ps5-exporter hash mismatch" >&2; exit 1; }
 mkdir -p "$app/payloads"
 cp "$exporter" "$app/payloads/ps5-exporter.elf"
-printf '%s\n' "ps5-exporter v0.2.0 by Marice, GPL-3.0-or-later: https://github.com/Marice/ps5-exporter" \
-    "Source: https://github.com/Marice/ps5-exporter/tree/v0.2.0" > "$app/payloads/ps5-exporter-NOTICE.txt"
+printf '%s\n' "ps5-exporter v0.3.1 by Marice, GPL-3.0-or-later: https://github.com/Marice/ps5-exporter" \
+    "Source: https://github.com/Marice/ps5-exporter/tree/v0.3.1" > "$app/payloads/ps5-exporter-NOTICE.txt"
 "$tool" self --inspect --file "$app/eboot.bin" > /dev/null
 echo "build-app: $app ($(stat -c %s "$app/eboot.bin") bytes)"
